@@ -51,10 +51,10 @@ Tests, docs and examples are skipped unless `--include-tests` is given.
 
 Results on public upstream repositories (October 2026):
 
-| Repository | Modules | Classes | Functions | CALLS edges (heuristic) |
-|---|---|---|---|---|
-| requests | 19 | 52 | 247 | 253 (28) |
-| httpx | 23 | 87 | 434 | 401 (59) |
+| Repository (commit) | Modules | Classes | Functions | DEFINED_IN | IMPORTS | CALLS (heuristic) | Calls resolved by exact rules |
+|---|---|---|---|---|---|---|---|
+| requests (`611c616`) | 19 | 52 | 247 | 299 | 80 | 238 (13) | 225 (95%) |
+| httpx (`b5addb6`) | 23 | 87 | 434 | 521 | 87 | 371 (29) | 342 (92%) |
 
 ### Part 1: embedding probe (CPU only)
 
