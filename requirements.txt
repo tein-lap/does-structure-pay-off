@@ -1,0 +1,7 @@
+# All permissive licenses (commercial use OK), as rule 3.6c requires.
+networkx>=3.0       # BSD-3-Clause
+numpy>=1.24         # BSD-3-Clause
+scipy>=1.10         # BSD-3-Clause
+scikit-learn>=1.3   # BSD-3-Clause
+pyyaml>=6.0         # MIT
+pytest>=7           # MIT (tests only)

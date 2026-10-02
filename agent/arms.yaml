@@ -1,0 +1,32 @@
+# Tool sets for the four ablation arms (paper Section 3.2) and the bridge configs (Section 3.3).
+#
+# Every arm shares the same model, prompt, editing and testing tools. Only the
+# EXPLORATION tools change. Tool names below are placeholders: replace them
+# with the exact names from HARNESS_README before generating configs.
+
+shared_tools:            # in every arm: needed to edit, test and submit
+  - write_file
+  - run_tests
+  - submit_patch         # free (does not count against the budget)
+  - get_status           # free
+
+exploration:
+  base: [grep, read_file]
+  graph: [get_code_neighbors, get_code_subgraph]
+  embedding: [search_similar_code]
+
+arms:
+  A: [base]                          # grep + read only
+  B: [base, graph]                   # + neighbours/subgraph, no embedding search
+  C: [base, embedding]               # + embedding search, no graph tools
+  D: [base, graph, embedding]        # everything
+
+# Bridge configurations: an arm plus the issue-to-symbol skill.
+# Set best_arm after the Part 2 results are in.
+best_arm: D
+bridge_skill: issue_to_symbols
+bridge_configs:
+  best+bridge: best_arm
+  D+bridge: D
+
+budgets: [25, 50, 100]
