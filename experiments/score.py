@@ -101,7 +101,7 @@ def main() -> None:
         row["repo"] = task[args.repo_key]
         row["resolved"] = int(bool(result.get("resolved")))
         row["budgeted_calls"] = sum(map(is_budgeted, events))
-        cats = Counter(call_category(e.get("tool", "")) for e in events if is_budgeted(e))
+        cats = Counter(call_category(e.get("tool", ""), e.get("args")) for e in events if is_budgeted(e))
         for cat in ("explore", "graph", "edit", "test", "other"):
             row[f"calls_{cat}"] = cats.get(cat, 0)
         gf = graph_for(row["repo"], graphs)

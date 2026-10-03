@@ -28,7 +28,7 @@ No agent experiments have been run yet, so there are no results yet.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest                      # 29 tests
+pytest                      # 32 tests
 ```
 
 Python 3.10+. Dependencies are BSD or MIT licensed (see `requirements.txt`).
@@ -188,14 +188,20 @@ record_run("runs/manifest.jsonl", config={"arm": "D", "budget": 100, "task": "..
 Each call records the UTC time, git commit (and whether the tree had changes), host,
 platform, Python version and GPUs.
 
-## Check against HARNESS_README before running agents
+## Checked against HARNESS_README
 
-- [ ] Exact tool names (update `agent/arms.yaml`, `READ_TOOLS`/`GRAPH_TOOLS` in `dspo/localization.py`)
-- [ ] Whether the tool-call budget can be set per config (25/50/100)
-- [ ] How skills receive input and return output; whether the graph is readable in the sandbox
-- [ ] Whether one skill call counts as one tool call (paper Section 3.3)
-- [ ] Graph and embedding file formats; field names in `tasks.jsonl`
-- [ ] How to export each run's tool-call log and its resolved/unresolved result
+- [x] Tool names: the 9 built-in tools (`run_command`, `read_file`, `edit_file`, `write_file`,
+      `submit_patch`, `get_status`, `get_code_neighbors`, `search_similar_code`, `get_code_subgraph`).
+      There is no `grep` tool: searches go through `run_command`, and `call_category()` splits
+      `run_command` calls into explore and test by looking at the command.
+- [x] Budget per config: `eval_config.yaml` with `evaluation.max_tool_calls`; `make_configs.py`
+      writes one next to every `agent.yaml`.
+- [x] Free tools: only `submit_patch` and `get_status`.
+- [x] Skills are declared under `skills:` (not `tools:`) in `agent.yaml`.
+- [x] Official graphs contain only `calls` edges (checked on all 127 graphs).
+- [ ] How a skill script is run inside the sandbox, and whether it costs a tool call (paper Section 3.3)
+- [ ] `get_code_neighbors(edge_type=...)`: the docs give `"CALLS"` as an example, but the data uses
+      lowercase `calls`. Check whether the filter is case-sensitive before telling the agent to use it.
 
 ## Competition data
 

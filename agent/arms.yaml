@@ -1,32 +1,37 @@
 # Tool sets for the four ablation arms (paper Section 3.2) and the bridge configs (Section 3.3).
 #
-# Every arm shares the same model, prompt, editing and testing tools. Only the
-# EXPLORATION tools change. Tool names below are placeholders: replace them
-# with the exact names from HARNESS_README before generating configs.
+# Tool names are the 9 built-in tools from HARNESS_README section 6. There is no
+# separate grep tool: searching (grep, find, ls) and running tests both use
+# run_command. Every arm shares the same model, prompt, editing and testing tools;
+# only the GRAPH tools change.
 
-shared_tools:            # in every arm: needed to edit, test and submit
-  - write_file
-  - run_tests
-  - submit_patch         # free (does not count against the budget)
+shared_tools:            # in every arm: needed to search, read, edit, test and submit
+  - run_command          # counts toward the budget
+  - read_file            # counts toward the budget (max 150 lines / 10,000 chars per call)
+  - edit_file            # counts toward the budget
+  - write_file           # counts toward the budget
+  - submit_patch         # free
   - get_status           # free
 
 exploration:
-  base: [grep, read_file]
+  base: []                                      # nothing beyond the shared tools
   graph: [get_code_neighbors, get_code_subgraph]
   embedding: [search_similar_code]
 
 arms:
-  A: [base]                          # grep + read only
+  A: [base]                          # run_command + read_file only
   B: [base, graph]                   # + neighbours/subgraph, no embedding search
   C: [base, embedding]               # + embedding search, no graph tools
   D: [base, graph, embedding]        # everything
 
-# Bridge configurations: an arm plus the issue-to-symbol skill.
-# Set best_arm after the Part 2 results are in.
+# Bridge configurations: an arm plus the issue-to-symbol skill (declared under
+# `skills:` in agent.yaml, not under `tools:`). Set best_arm after Part 2.
 best_arm: D
-bridge_skill: issue_to_symbols
+bridge_skill: skills/issue_to_symbols
 bridge_configs:
   best+bridge: best_arm
   D+bridge: D
 
+# Written to eval_config.yaml (evaluation.max_tool_calls) next to each agent.yaml.
 budgets: [25, 50, 100]
+max_time_minutes: 60

@@ -8,8 +8,10 @@
    and `{{BRIDGE_NOTE}}` where the agent should be told to call the bridge first.
 4. Run:  python agent/make_configs.py --template agent/template.yaml --out agent/build
 
+Each output folder is a complete submission directory:
+    agent.yaml         tools filled in; bridge configs also get `skills: [skills/issue_to_symbols]`
+    eval_config.yaml   evaluation.max_tool_calls = the budget (HARNESS_README 7.1)
 Each config differs ONLY in its tools (and budget), as the ablation requires.
-The script prints a diff summary so you can check that nothing else changed.
 """
 
 import argparse
@@ -25,8 +27,8 @@ BRIDGE_NOTE = ("Before exploring, call the issue_to_symbols skill once with the 
 def tools_for(spec: dict, groups: list[str]) -> list[str]:
     tools = []
     for g in groups:
-        tools += spec["exploration"][g]
-    return tools + spec["shared_tools"]
+        tools += spec["exploration"][g] or []
+    return spec["shared_tools"] + tools
 
 
 def render(template: str, tools: list[str], budget: int, bridge: bool) -> str:
@@ -39,6 +41,17 @@ def render(template: str, tools: list[str], budget: int, bridge: bool) -> str:
     out = out.replace("{{BRIDGE_NOTE}}", BRIDGE_NOTE if bridge else "")
     yaml.safe_load(out)  # fail early if the result is not valid YAML
     return out
+
+
+def add_skill(agent_yaml: str, skill_path: str) -> str:
+    """Declare the bridge skill under `skills:` (HARNESS_README 2.3), keeping the rest unchanged."""
+    if re.search(r"^skills:", agent_yaml, re.M):
+        return re.sub(r"^skills:[ \t]*\n", f"skills:\n  - {skill_path}\n", agent_yaml, count=1, flags=re.M)
+    return agent_yaml.rstrip("\n") + f"\nskills:\n  - {skill_path}\n"
+
+
+def eval_config(budget: int, minutes: float) -> str:
+    return f"evaluation:\n  max_tool_calls: {budget}\n  max_time_minutes: {minutes}\n"
 
 
 def main() -> None:
@@ -59,12 +72,17 @@ def main() -> None:
         configs[name] = (spec["arms"][arm], True)
 
     for name, (groups, bridge) in configs.items():
-        tools = tools_for(spec, groups) + ([spec["bridge_skill"]] if bridge else [])
+        tools = tools_for(spec, groups)
         for budget in spec["budgets"]:
             folder = args.out / name / f"b{budget}"
             folder.mkdir(parents=True, exist_ok=True)
-            (folder / "agent.yaml").write_text(render(template, tools, budget, bridge))
-        print(f"{name:12s} tools: {', '.join(tools)}")
+            text = render(template, tools, budget, bridge)
+            if bridge:
+                text = add_skill(text, spec["bridge_skill"])
+            yaml.safe_load(text)
+            (folder / "agent.yaml").write_text(text)
+            (folder / "eval_config.yaml").write_text(eval_config(budget, spec.get("max_time_minutes", 60)))
+        print(f"{name:12s} tools: {', '.join(tools)}" + (f"  + skill {spec['bridge_skill']}" if bridge else ""))
     print(f"configs written to {args.out}/<config>/b<budget>/agent.yaml")
 
 

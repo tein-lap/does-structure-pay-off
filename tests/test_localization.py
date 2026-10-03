@@ -97,3 +97,22 @@ def test_patch_alignment_detects_wrong_commit(graph):
     assert patch_alignment(good, graph) == (1, 1)
     assert patch_alignment(stale, graph) == (0, 1)
     assert patch_alignment("--- a/pkg/client.py\n+++ b/pkg/client.py\n@@ -12,0 +13,1 @@\n+        x\n", graph) == (0, 0)
+
+
+def test_run_command_is_split_into_explore_and_test():
+    from dspo.localization import call_category
+    assert call_category("run_command", {"command": "grep -rn parse_value pkg"}) == "explore"
+    assert call_category("run_command", {"command": "git log --oneline -5"}) == "explore"
+    assert call_category("run_command", {"command": "python -m pytest tests -x"}) == "test"
+    assert call_category("read_file", {"filepath": "pkg/client.py"}) == "explore"
+    assert call_category("get_code_neighbors", {"node": "Client"}) == "graph"
+
+
+def test_shell_reads_count_as_opened(graph):
+    from dspo.localization import visited_from_events
+    seen = visited_from_events([{"tool": "run_command", "args": {"command": "cat pkg/utils.py"}}], graph)
+    assert "pkg/utils.py" in seen.files and "pkg.utils.helper" in seen.functions
+    grep = visited_from_events([{"tool": "run_command", "args": {"command": "grep -rn helper pkg/utils.py"}}], graph)
+    assert not grep.files
+    part = visited_from_events([{"tool": "run_command", "args": {"command": "sed -n '1,2p' pkg/utils.py"}}], graph)
+    assert "pkg.utils.helper" in part.functions and "pkg.utils.very_unique_function_name" not in part.functions

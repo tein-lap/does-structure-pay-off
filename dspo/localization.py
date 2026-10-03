@@ -17,8 +17,10 @@ Agent side
     every mention would let one broad grep "visit" dozens of files and inflate
     recall.
 
-    Tool names differ between harnesses; adjust READ_TOOLS / GRAPH_TOOLS /
-    FREE_TOOLS to match HARNESS_README.
+    Tool names follow the competition harness (HARNESS_README section 6): there is
+    no separate grep tool, so searches and test runs both go through run_command,
+    and call_category() looks at the command to tell them apart. Shell reads such
+    as `cat file`, `head`, `tail` or `sed -n 'a,bp' file` count as opening a file.
 
 Budget truncation
     truncate(events, k) keeps the events within the first k budgeted tool calls.
@@ -39,7 +41,7 @@ READ_TOOLS = {"read_file", "view_file", "open_file", "read", "view", "cat"}
 GRAPH_TOOLS = {"get_code_neighbors", "get_code_subgraph", "search_similar_code"}
 SEARCH_TOOLS = {"grep", "search", "find_files", "list_files", "ls", "glob"}
 EDIT_TOOLS = {"write_file", "edit_file", "apply_patch", "str_replace", "replace_in_file", "create_file"}
-TEST_TOOLS = {"run_tests", "run_command", "bash", "shell", "execute", "python"}
+TEST_TOOLS = {"run_tests", "bash", "shell", "execute", "python"}   # run_command is split by call_category()
 FREE_TOOLS = {"submit_patch", "get_status"}  # do not count against the 100-call budget
 
 PATH_ARGS = ("path", "file", "file_path", "filename", "filepath")
@@ -291,7 +293,19 @@ def truncate(events: list[dict], k: int) -> list[dict]:
     return out
 
 
-def call_category(tool: str) -> str:
+SHELL_EXPLORE = re.compile(r"^\s*(grep|rg|egrep|fgrep|find|ls|tree|cat|head|tail|sed|awk|wc|git\s+(log|show|grep|ls-files|blame|status))\b")
+SHELL_READ = re.compile(r"^\s*(?:cat|head|tail)\s+(?:-n\s*\d+\s+|-\d+\s+)?([\w./-]+\.py)\s*$"
+                        r"|^\s*sed\s+-n\s+['\"]?(\d+),(\d+)p['\"]?\s+([\w./-]+\.py)\s*$")
+
+
+def _command(args: dict) -> str:
+    cmd = args.get("command") or args.get("cmd") or ""
+    return cmd if isinstance(cmd, str) else ""
+
+
+def call_category(tool: str, args: dict | None = None) -> str:
+    if tool == "run_command":   # one tool for search, reading and tests: look at the command
+        return "explore" if SHELL_EXPLORE.match(_command(args or {})) else "test"
     if tool in READ_TOOLS or tool in SEARCH_TOOLS:
         return "explore"
     if tool in GRAPH_TOOLS:
@@ -310,6 +324,18 @@ def visited_from_events(events: list[dict], graph) -> Locations:
     seen = Locations()
     for ev in events:
         tool, args = ev.get("tool"), ev.get("args") or {}
+        if tool == "run_command":   # shell reads: cat/head/tail <file>, sed -n 'a,bp' <file>
+            m = SHELL_READ.match(_command(args))
+            if m:
+                path = m.group(1) or m.group(4)
+                file = gf.match_file(path)
+                if file:
+                    seen.files.add(file)
+                    if m.group(1):
+                        seen.functions |= {n for _, _, n in gf.defs.get(file, [])}
+                    else:
+                        seen.functions |= gf.overlapping(file, int(m.group(2)), int(m.group(3)))
+            continue
         if tool in READ_TOOLS:
             path = _first(args, PATH_ARGS)
             file = gf.match_file(path) if isinstance(path, str) else None
