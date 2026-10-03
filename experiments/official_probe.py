@@ -84,6 +84,45 @@ def load_tasks(data: Path, repo: str | None) -> list[dict]:
     return tasks
 
 
+class FileIndex:
+    """Find a task's graph / embedding / snapshot file under any of its known names.
+
+    The data description says task-named files (<instance_id>.json) are hard-linked
+    to commit-named files (<repo_short>_<base_commit>.json). Hard links may not
+    survive uploading, and files may sit in sub-folders, so every file under the
+    data folder is indexed once and looked up by instance id or base commit.
+    """
+
+    def __init__(self, data: Path):
+        self.data = data
+        self.by_ext: dict[str, list[Path]] = {}
+        for p in data.rglob("*"):
+            if p.is_file():
+                ext = "".join(p.suffixes[-1:])
+                self.by_ext.setdefault(ext, []).append(p)
+
+    def find(self, task: dict, folder: str, ext: str) -> Path | None:
+        iid = str(task.get("instance_id", ""))
+        commit = str(task.get("base_commit", ""))
+        short = str(task.get("repo", "")).split("/")[-1].lower() or iid.split("_")[0]
+        files = self.by_ext.get(ext, [])
+        in_folder = [p for p in files if folder in p.parts] or files
+        names = [f"{iid}{ext}", f"{short}_{commit}{ext}", f"{short}_{commit[:7]}{ext}", f"{commit}{ext}"]
+        for name in names:
+            for p in in_folder:
+                if p.name == name:
+                    return p
+        if commit:
+            hits = [p for p in in_folder if commit in p.name]
+            if len(hits) == 1:
+                return hits[0]
+        return None
+
+    def sample(self, folder: str, n: int = 5) -> list[str]:
+        out = [str(p.relative_to(self.data)) for ps in self.by_ext.values() for p in ps if folder in p.parts]
+        return sorted(out)[:n]
+
+
 def kind_from_text(text: str) -> str:
     head = (text or "").lstrip()
     while head.startswith("@"):                       # skip decorators
@@ -206,9 +245,9 @@ def graph_knn(node, ug, cands, k, rng):
     return out
 
 
-def gold_one(task, g, emb, data: Path, k: int, rng: random.Random, min_alignment: float):
-    tgz = data / "snapshots" / f"{task['instance_id']}.tgz"
-    if not tgz.exists():
+def gold_one(task, g, emb, index: "FileIndex", k: int, rng: random.Random, min_alignment: float):
+    tgz = index.find(task, "snapshots", ".tgz")
+    if tgz is None:
         return None, "no_snapshot"
     with tempfile.TemporaryDirectory() as tmp:
         root = unpack_snapshot(tgz, Path(tmp))
@@ -264,12 +303,20 @@ def main(argv=None) -> int:
 
     structure, gold_rows, status = [], {"embedding": [], "random": [], "graph": []}, Counter()
     seen_graphs = set()
+    index = FileIndex(data)
+    warned = False
+    print(f"indexed files: { {k: len(v) for k, v in index.by_ext.items()} }", file=sys.stderr)
     t0 = time.time()
     for i, t in enumerate(tasks, 1):
-        gpath = data / "graphs" / f"{t['instance_id']}.json"
-        epath = data / "embeddings" / f"{t['instance_id']}.npz"
-        if not gpath.exists() or not epath.exists():
-            status["missing_graph_or_embeddings"] += 1
+        gpath = index.find(t, "graphs", ".json")
+        epath = index.find(t, "embeddings", ".npz")
+        if gpath is None or epath is None:
+            status["missing_graph" if gpath is None else "missing_embeddings"] += 1
+            if not warned:
+                warned = True
+                print(f"  could not find files for {t['instance_id']} (base_commit {str(t.get('base_commit'))[:12]})", file=sys.stderr)
+                for folder in ("graphs", "embeddings", "snapshots"):
+                    print(f"  sample of {folder}/: {index.sample(folder)}", file=sys.stderr)
             continue
         g = load_official_graph(gpath)
         emb = load_official_embeddings(epath, g)
@@ -280,7 +327,7 @@ def main(argv=None) -> int:
             if s:
                 structure.append(s)
         if not args.skip_gold:
-            res, why = gold_one(t, g, emb, data, args.k, rng, args.min_alignment)
+            res, why = gold_one(t, g, emb, index, args.k, rng, args.min_alignment)
             status[why] += 1
             if res:
                 for name, vals in res.items():
