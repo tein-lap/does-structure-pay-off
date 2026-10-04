@@ -44,12 +44,12 @@ def test_runtime_fits_the_total_limit(tmp_path):
     assert r.returncode == 0, r.stderr
     ev = yaml.safe_load((out / "D" / "b100" / "eval_config.yaml").read_text())["evaluation"]
     assert ev["max_tool_calls"] == 100
-    assert ev["max_time_minutes"] == 3                      # floor(9 h * 60 * 0.7 / 120 tasks)
-    assert 120 * ev["max_time_minutes"] <= 9 * 60 * 0.7     # worst case fits with the margin
-    assert ev["timeout_seconds"] == 60 and ev["max_turns"] == 150   # 60 s = a third of 3 minutes
+    assert ev["max_time_minutes"] == 4                      # floor(12 h * 60 * 0.7 / 120 tasks)
+    assert 120 * ev["max_time_minutes"] <= 12 * 60 * 0.7    # worst case fits with the margin
+    assert ev["timeout_seconds"] == 60 and ev["max_turns"] == 150   # 60 s: the cap (a third of 4 min is 80 s)
     assert "timeout 60 python -m pytest" in yaml.safe_load((out / "D" / "b100" / "agent.yaml").read_text())["instruction"]
     prompt = yaml.safe_load((out / "D" / "b100" / "agent.yaml").read_text())["instruction"]
-    assert "about 3 minutes" in prompt
+    assert "about 4 minutes" in prompt
 
 
 def test_smoke_submission(tmp_path):

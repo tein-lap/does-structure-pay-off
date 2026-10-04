@@ -39,9 +39,10 @@ budgets: [25, 50, 100]
 # 120 tasks) and stops it with "Notebook Timeout" if it exceeds the total limit.
 # max_time_minutes per task is CALCULATED from these numbers, never set by hand:
 #   floor(total_hours * 60 * parallel_tasks / hidden_tasks * safety)
-# CHECK total_hours and parallel_tasks on the competition's Code Requirements page.
+# Source: competition Overview > Evaluation: "Your agent has a limit of 12 hours to submit
+# patches for all tasks, inclusive of sandbox setup time, but excluding time for patch validation."
 runtime:
-  total_hours: 9          # total runtime limit of one submission
+  total_hours: 12         # total limit for all tasks, including sandbox setup
   hidden_tasks: 120       # "about 120"; the hidden set can be larger, hence the safety margin
   parallel_tasks: 1       # 1 = tasks run one after another (worst case)
   safety: 0.7             # leave 30% for setup, model loading and a larger hidden set

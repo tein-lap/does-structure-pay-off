@@ -196,22 +196,22 @@ failed this way. Causes, all fixed in `agent/make_configs.py` and `agent/submiss
 
 | Cause | Fix |
 |---|---|
-| `agent.yaml` loaded its prompt and settings through `!include`, which is not standard YAML; our check read the instruction as the text `prompts/system.md` | Prompt and settings are inlined; every `agent.yaml` must load with `yaml.safe_load` and contain the real budget and submit rule |
-| `max_time_minutes: 60` per task, about 120 hours worst case | Calculated from `runtime` in `arms.yaml`: floor(total hours × 60 × 0.7 / 120 tasks), 3 minutes for a 9-hour limit; the build refuses any config whose worst case does not fit |
+| `max_time_minutes: 60` per task, about 120 hours worst case, against the competition's 12-hour total limit | Calculated from `runtime` in `arms.yaml`: floor(12 h × 60 × 0.7 / 120 tasks) = 4 minutes; the build refuses any config whose worst case does not fit |
 | `max_output_tokens: 16384`, `thinking_budget: 4096`, `include_thoughts: true` | 2048 tokens, 512 thinking tokens, thoughts not returned; the build refuses `max_output_tokens` above 4096 |
 | `timeout_seconds: 300`, `max_turns: 500` | 60 seconds, budget + 50 turns |
 | Prompt said "call submit_patch last" and invited frequent free `get_status` calls | Submit as soon as a plausible fix exists, always before calls or time run out; `get_status` at most every 10 actions; tests only with `timeout 60`; no network commands |
+| (Not a cause.) `!include` is officially supported by the harness (Overview: "Resolves file paths relative to the directory of the file containing the tag"). We inline the prompt and settings anyway, so `agent.yaml` is self-contained and our checks can read the real prompt | Every `agent.yaml` must load with `yaml.safe_load` and contain the real budget and submit rule |
 | The first submission was the heaviest configuration | `SMOKE_A_b3.zip` (arm A, 3 calls, 1 minute, no thinking) is built to check the basics first |
 
 ```bash
-python agent/make_configs.py --out agent/build --total-hours 9 --parallel-tasks 1
+python agent/make_configs.py --out agent/build   # 12-hour limit is the default in arms.yaml
 ```
 
-Check the total limit and whether tasks run in parallel on the competition's Code Requirements page,
-and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b3.zip` first, then the
+The total limit is 12 hours for all tasks, including sandbox setup (competition Overview > Evaluation);
+`arms.yaml` uses it. Pass `--total-hours` or `--parallel-tasks` only if that changes. Submit `SMOKE_A_b3.zip` first, then the
 b100 zips of arms A, B, C and D. With a few minutes per task the time limit, not the call budget,
 ends each run, so b25/b50 zips would behave almost the same as b100. One command may use at most a
-third of the task time (60 seconds at 3 minutes per task).
+third of the task time, at most 60 seconds (60 seconds at 4 minutes per task).
 
 ## Checked against HARNESS_README
 

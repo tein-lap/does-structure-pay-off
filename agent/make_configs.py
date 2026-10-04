@@ -2,7 +2,7 @@
 
 The shared template lives in agent/submission_template/:
     agent.yaml            placeholders {{INSTRUCTION}}, {{TOOLS}}, {{SAMPLING}}
-    prompts/system.md     the instruction; placeholders {{BUDGET}}, {{MINUTES}} ("3 minutes"), {{TOOL_GUIDE}}
+    prompts/system.md     the instruction; placeholders {{BUDGET}}, {{MINUTES}} ("4 minutes"), {{TOOL_GUIDE}}
     configs/sampling.yaml generation settings, the same for every arm
 
 The prompt and the sampling settings are INLINED into agent.yaml. The submission
@@ -28,7 +28,7 @@ with a safety margin. Every zip passes these checks before it is written:
 Bridge arms are skipped until agent/skills/issue_to_symbols/ contains a SKILL.md.
 
 Usage:
-    python agent/make_configs.py --out agent/build [--total-hours 9] [--parallel-tasks 1]
+    python agent/make_configs.py --out agent/build [--total-hours 12] [--parallel-tasks 1]
 """
 
 from __future__ import annotations
@@ -236,7 +236,7 @@ def main() -> None:
     parser.add_argument("--arms", type=Path, default=HERE / "arms.yaml")
     parser.add_argument("--skills-dir", type=Path, default=HERE / "skills" / "issue_to_symbols")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--total-hours", type=float, help="override runtime.total_hours (Code Requirements page)")
+    parser.add_argument("--total-hours", type=float, help="override runtime.total_hours (default 12, from the competition Overview > Evaluation)")
     parser.add_argument("--parallel-tasks", type=int, help="override runtime.parallel_tasks")
     args = parser.parse_args()
     spec = yaml.safe_load(args.arms.read_text())
