@@ -52,6 +52,13 @@ runtime:
 # Its only goal is to finish and get any score. Submit it first.
 smoke:
   arm: A
-  budget: 5
-  max_time_minutes: 2
+  budget: 3
+  max_time_minutes: 1     # worst case 120 tasks x 1 min = 2 hours, so it finishes even under a short limit
   thinking_budget: 0
+
+# NOTE for the paper (Section 3.2): with a few minutes per task the TIME limit ends a
+# run long before 25, 50 or 100 calls are used, so b25/b50/b100 submissions behave
+# almost the same. Leaderboard submissions measure the arms (A-D) under the real time
+# limit; the budget curve must come from runs with enough time per task (for example
+# your own notebook runs on the public tasks) or from truncating 100-call trajectories
+# (localization only).

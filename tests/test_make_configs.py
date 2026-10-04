@@ -53,13 +53,15 @@ def test_runtime_fits_the_total_limit(tmp_path):
 
 def test_smoke_submission(tmp_path):
     out, r = build(tmp_path)
-    with zipfile.ZipFile(out / "zips" / "SMOKE_A_b5.zip") as zf:
+    with zipfile.ZipFile(out / "zips" / "SMOKE_A_b3.zip") as zf:
         names = set(zf.namelist())
         agent = yaml.safe_load(zf.read("agent.yaml"))
         ev = yaml.safe_load(zf.read("eval_config.yaml"))["evaluation"]
     assert names == {"agent.yaml", "eval_config.yaml"}       # nothing else to read, all at the zip root
-    assert ev["max_tool_calls"] == 5 and ev["max_time_minutes"] == 2
+    assert ev["max_tool_calls"] == 3 and ev["max_time_minutes"] == 1
+    assert 120 * ev["max_time_minutes"] <= 2 * 60                # finishes even under a 2-hour limit
     assert agent["generate_content_config"]["thinking_config"]["thinking_budget"] == 0
+    assert "about 1 minute for this task" in agent["instruction"]
 
 
 def test_longer_limit_gives_more_time_per_task(tmp_path):

@@ -201,14 +201,14 @@ failed this way. Causes, all fixed in `agent/make_configs.py` and `agent/submiss
 | `max_output_tokens: 16384`, `thinking_budget: 4096`, `include_thoughts: true` | 2048 tokens, 512 thinking tokens, thoughts not returned; the build refuses `max_output_tokens` above 4096 |
 | `timeout_seconds: 300`, `max_turns: 500` | 60 seconds, budget + 50 turns |
 | Prompt said "call submit_patch last" and invited frequent free `get_status` calls | Submit as soon as a plausible fix exists, always before calls or time run out; `get_status` at most every 10 actions; tests only with `timeout 60`; no network commands |
-| The first submission was the heaviest configuration | `SMOKE_A_b5.zip` (arm A, 5 calls, 2 minutes, no thinking) is built to check the basics first |
+| The first submission was the heaviest configuration | `SMOKE_A_b3.zip` (arm A, 3 calls, 1 minute, no thinking) is built to check the basics first |
 
 ```bash
 python agent/make_configs.py --out agent/build --total-hours 9 --parallel-tasks 1
 ```
 
 Check the total limit and whether tasks run in parallel on the competition's Code Requirements page,
-and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b5.zip` first, then
+and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b3.zip` first, then
 `A_b25.zip`, and scale up one change at a time.
 
 ## Checked against HARNESS_README

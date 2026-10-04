@@ -2,7 +2,7 @@
 
 The shared template lives in agent/submission_template/:
     agent.yaml            placeholders {{INSTRUCTION}}, {{TOOLS}}, {{SAMPLING}}
-    prompts/system.md     the instruction; placeholders {{BUDGET}}, {{MINUTES}}, {{TOOL_GUIDE}}
+    prompts/system.md     the instruction; placeholders {{BUDGET}}, {{MINUTES}} ("3 minutes"), {{TOOL_GUIDE}}
     configs/sampling.yaml generation settings, the same for every arm
 
 The prompt and the sampling settings are INLINED into agent.yaml. The submission
@@ -108,7 +108,8 @@ def render_agent(template: Path, tools: list[str], budget: int, minutes: int, br
                  sampling_overrides: dict | None = None) -> str:
     guide = "\n".join(TOOL_GUIDE[t] for t in tools) + (("\n" + BRIDGE_NOTE) if bridge else "")
     prompt = (template / "prompts" / "system.md").read_text()
-    prompt = prompt.replace("{{BUDGET}}", str(budget)).replace("{{MINUTES}}", str(minutes))
+    prompt = prompt.replace("{{BUDGET}}", str(budget))
+    prompt = prompt.replace("{{MINUTES}}", f"{minutes} minute" + ("" if minutes == 1 else "s"))
     prompt = prompt.replace("{{TOOL_GUIDE}}", guide)
 
     sampling = yaml.safe_load((template / "configs" / "sampling.yaml").read_text())
@@ -132,7 +133,7 @@ def check_submission(folder: Path, budget: int, minutes: int, runtime: dict, too
     try:
         agent = yaml.safe_load(text)          # standard loader: fails on custom tags such as !include
     except yaml.YAMLError as exc:
-        raise SystemExit(f"{folder}/agent.yaml is not plain YAML: {exc}")
+        raise SystemExit(f"{folder}/agent.yaml is not plain YAML: {exc}") from exc
     problems = []
     if agent.get("tools") != tools:
         problems.append(f"tools are {agent.get('tools')}, expected {tools}")
