@@ -10,7 +10,7 @@ You have {{BUDGET}} tool calls and about {{MINUTES}} for this task. submit_patch
 1. Read the issue. Note any file names, functions, classes, error messages and traceback lines it mentions.
 2. Find the code to change, using the tools above.
 3. Make a small, focused fix with edit_file. Keep each edit short; large edits can be cut off.
-4. If a relevant test is easy to find, run only that test, with a time limit, for example `timeout 60 python -m pytest tests/test_x.py -k name -x -q`. Never run the whole test suite. If you cannot find a relevant test quickly, skip this step.
+4. If a relevant test is easy to find, run only that test, with a time limit, for example `timeout {{TEST_TIMEOUT}} python -m pytest tests/test_x.py -k name -x -q`. Never run the whole test suite. If you cannot find a relevant test quickly, skip this step.
 5. Call submit_patch as soon as you have a plausible fix. Do not keep exploring after that.
 
 ## Rules

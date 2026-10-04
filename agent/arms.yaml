@@ -45,7 +45,7 @@ runtime:
   hidden_tasks: 120       # "about 120"; the hidden set can be larger, hence the safety margin
   parallel_tasks: 1       # 1 = tasks run one after another (worst case)
   safety: 0.7             # leave 30% for setup, model loading and a larger hidden set
-  timeout_seconds: 60     # limit for one run_command call
+  timeout_seconds: 60     # upper limit for one run_command call; the build uses a third of the task time if that is less
   extra_turns: 50         # max_turns = budget + extra_turns
 
 # "Use a submission to verify basic fundamentals": the smallest possible agent.

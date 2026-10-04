@@ -14,6 +14,7 @@ For every arm in agent/arms.yaml and every budget, this script writes
     <out>/<arm>/b<budget>/agent.yaml        tools, instruction and sampling filled in
     <out>/<arm>/b<budget>/eval_config.yaml  max_tool_calls, max_time_minutes, timeout_seconds, max_turns
     <out>/zips/<arm>_b<budget>.zip          files at the zip root, ready to upload
+                                            (timeout_seconds for one command = a third of the task time, max 60 s)
     <out>/zips/SMOKE_<arm>_b<budget>.zip    the minimal "verify fundamentals" submission
 
 max_time_minutes is calculated from the runtime section of arms.yaml so that the
@@ -74,6 +75,11 @@ def minutes_per_task(runtime: dict) -> int:
     return max(1, math.floor(total * runtime.get("parallel_tasks", 1) / runtime["hidden_tasks"]))
 
 
+def command_timeout(runtime: dict, minutes: int) -> int:
+    """Seconds one run_command may take: at most a third of the task's time, at least 15 s."""
+    return min(runtime["timeout_seconds"], max(15, minutes * 60 // 3))
+
+
 def worst_case_minutes(runtime: dict, minutes: int) -> float:
     return runtime["hidden_tasks"] * minutes / runtime.get("parallel_tasks", 1)
 
@@ -100,17 +106,17 @@ def eval_config(budget: int, minutes: int, runtime: dict) -> str:
     return ("evaluation:\n"
             f"  max_tool_calls: {budget}\n"
             f"  max_time_minutes: {minutes}\n"
-            f"  timeout_seconds: {runtime['timeout_seconds']}\n"
+            f"  timeout_seconds: {command_timeout(runtime, minutes)}\n"
             f"  max_turns: {budget + runtime['extra_turns']}\n")
 
 
 def render_agent(template: Path, tools: list[str], budget: int, minutes: int, bridge: bool,
-                 sampling_overrides: dict | None = None) -> str:
+                 sampling_overrides: dict | None = None, test_timeout: int = 60) -> str:
     guide = "\n".join(TOOL_GUIDE[t] for t in tools) + (("\n" + BRIDGE_NOTE) if bridge else "")
     prompt = (template / "prompts" / "system.md").read_text()
     prompt = prompt.replace("{{BUDGET}}", str(budget))
     prompt = prompt.replace("{{MINUTES}}", f"{minutes} minute" + ("" if minutes == 1 else "s"))
-    prompt = prompt.replace("{{TOOL_GUIDE}}", guide)
+    prompt = prompt.replace("{{TOOL_GUIDE}}", guide).replace("{{TEST_TIMEOUT}}", str(test_timeout))
 
     sampling = yaml.safe_load((template / "configs" / "sampling.yaml").read_text())
     for key, value in (sampling_overrides or {}).items():
@@ -146,6 +152,8 @@ def check_submission(folder: Path, budget: int, minutes: int, runtime: dict, too
     ev = yaml.safe_load((folder / "eval_config.yaml").read_text())["evaluation"]
     if ev["max_tool_calls"] != budget or ev["max_time_minutes"] != minutes:
         problems.append("eval_config.yaml does not match the budget or time")
+    if ev["timeout_seconds"] * 3 > max(45, minutes * 60) or f"timeout {ev['timeout_seconds']} " not in instruction:
+        problems.append("command timeout is not a third of the task time, or the prompt uses a different one")
     total = runtime["total_hours"] * 60
     if worst_case_minutes(runtime, minutes) > total * runtime["safety"]:
         problems.append(f"worst case {worst_case_minutes(runtime, minutes):.0f} min > "
@@ -175,7 +183,7 @@ def build_one(template: Path, folder: Path, tools: list[str], budget: int, minut
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    agent = render_agent(template, tools, budget, minutes, bridge, sampling_overrides)
+    agent = render_agent(template, tools, budget, minutes, bridge, sampling_overrides, command_timeout(runtime, minutes))
     if bridge:
         agent = add_skill(agent, bridge_skill)
         shutil.copytree(skills_dir, folder / bridge_skill)

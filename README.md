@@ -208,8 +208,10 @@ python agent/make_configs.py --out agent/build --total-hours 9 --parallel-tasks 
 ```
 
 Check the total limit and whether tasks run in parallel on the competition's Code Requirements page,
-and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b3.zip` first, then
-`A_b25.zip`, and scale up one change at a time.
+and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b3.zip` first, then the
+b100 zips of arms A, B, C and D. With a few minutes per task the time limit, not the call budget,
+ends each run, so b25/b50 zips would behave almost the same as b100. One command may use at most a
+third of the task time (60 seconds at 3 minutes per task).
 
 ## Checked against HARNESS_README
 
