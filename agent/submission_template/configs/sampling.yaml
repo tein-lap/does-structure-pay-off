@@ -1,7 +1,10 @@
+# Generation settings shared by every arm (inlined into agent.yaml by make_configs.py).
+# Kept small for speed: the context is 32,768 tokens and is compacted at about 14k,
+# and every token generated before an action costs time against the runtime limit.
 temperature: 0.2
 top_p: 0.95
 seed: 0
-max_output_tokens: 16384
+max_output_tokens: 2048
 thinking_config:
-  thinking_budget: 4096
-  include_thoughts: true
+  thinking_budget: 512
+  include_thoughts: false

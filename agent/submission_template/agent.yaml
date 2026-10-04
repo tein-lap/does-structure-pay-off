@@ -1,8 +1,12 @@
-# Same agent for every arm. make_configs.py fills the tool list below; nothing else changes between arms.
+# Same agent for every arm. make_configs.py fills the three placeholders below;
+# nothing else changes between arms. Everything is inlined: no !include and no
+# other files are read, so the config loads with any standard YAML loader.
 # Base model only: no LoRA adapter and no sub-agent, so arm A cannot reach graph tools indirectly.
 name: swe_agent
 model: gemma-4-31b-it-qat-w4a16-ct
-instruction: !include prompts/system.md
+instruction: |
+  {{INSTRUCTION}}
 tools:
   {{TOOLS}}
-generate_content_config: !include configs/sampling.yaml
+generate_content_config:
+  {{SAMPLING}}

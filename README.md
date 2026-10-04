@@ -28,7 +28,7 @@ No agent experiments have been run yet, so there are no results yet.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest                      # 32 tests
+pytest                      # 36 tests
 ```
 
 Python 3.10+. Dependencies are BSD or MIT licensed (see `requirements.txt`).
@@ -187,6 +187,29 @@ record_run("runs/manifest.jsonl", config={"arm": "D", "budget": 100, "task": "..
 
 Each call records the UTC time, git commit (and whether the tree had changes), host,
 platform, Python version and GPUs.
+
+## Submitting to the main competition
+
+Kaggle reruns a submission end-to-end on the hidden set (about 120 tasks) and stops it with
+**Notebook Timeout** if the total runtime limit is exceeded. Our first submission (arm D, 100 calls)
+failed this way. Causes, all fixed in `agent/make_configs.py` and `agent/submission_template/`:
+
+| Cause | Fix |
+|---|---|
+| `agent.yaml` loaded its prompt and settings through `!include`, which is not standard YAML; our check read the instruction as the text `prompts/system.md` | Prompt and settings are inlined; every `agent.yaml` must load with `yaml.safe_load` and contain the real budget and submit rule |
+| `max_time_minutes: 60` per task, about 120 hours worst case | Calculated from `runtime` in `arms.yaml`: floor(total hours × 60 × 0.7 / 120 tasks), 3 minutes for a 9-hour limit; the build refuses any config whose worst case does not fit |
+| `max_output_tokens: 16384`, `thinking_budget: 4096`, `include_thoughts: true` | 2048 tokens, 512 thinking tokens, thoughts not returned; the build refuses `max_output_tokens` above 4096 |
+| `timeout_seconds: 300`, `max_turns: 500` | 60 seconds, budget + 50 turns |
+| Prompt said "call submit_patch last" and invited frequent free `get_status` calls | Submit as soon as a plausible fix exists, always before calls or time run out; `get_status` at most every 10 actions; tests only with `timeout 60`; no network commands |
+| The first submission was the heaviest configuration | `SMOKE_A_b5.zip` (arm A, 5 calls, 2 minutes, no thinking) is built to check the basics first |
+
+```bash
+python agent/make_configs.py --out agent/build --total-hours 9 --parallel-tasks 1
+```
+
+Check the total limit and whether tasks run in parallel on the competition's Code Requirements page,
+and pass them with `--total-hours` and `--parallel-tasks`. Submit `SMOKE_A_b5.zip` first, then
+`A_b25.zip`, and scale up one change at a time.
 
 ## Checked against HARNESS_README
 
