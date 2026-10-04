@@ -82,6 +82,34 @@ The embedding and task formats are not confirmed yet. The loaders accept a node
 attribute, `.npz` (`ids` + `vectors`), `.npy` + an id list, or `.json`/`.pkl`
 mappings, and `--patch-key`/`--repo-key`/`--id-key` select the task fields.
 
+### Part 1 on the official data (numbers in paper Section 4.1)
+
+`experiments/official_probe.py` runs both probes on the competition's own files
+(`tasks.jsonl`, `graphs/`, `embeddings/`, `snapshots/` from the Kaggle Data tab). The official
+graphs have no line numbers, so for the gold step it unpacks each task's snapshot at its base
+commit, builds a graph with `dspo.graph_builder`, finds the changed functions and maps them to
+official node ids. Files are found by task id or by commit name, in any sub-folder.
+
+The competition data must not be published (rule 2.4b). Run this in a **private** Kaggle
+notebook with the competition data attached, and publish only the printed numbers:
+
+```bash
+pip install networkx numpy scipy          # if the notebook lacks them
+git clone https://github.com/tein-lap/does-structure-pay-off && cd does-structure-pay-off
+for repo in requests httpx rich fastapi; do
+  python experiments/official_probe.py --data /kaggle/input/gemma-4-developer-agent \
+      --repo $repo --pairs 50000 -k 10 --seed 0 --out results/probe_$repo.json
+done
+```
+
+These are the settings behind Section 4.1: one structure probe per graph (500 source nodes ×
+100 random targets, so up to 50,000 pairs), k = 10, seed 0, and tasks dropped when their patch
+does not match the snapshot (`--min-alignment 0.9`). Each JSON result holds the median, minimum
+and maximum Spearman ρ over graphs, the share of disconnected pairs, the distance histogram, the
+number of tasks used and dropped (and why), and the gold-neighbour and hit rates for embedding,
+random and graph neighbours. The run takes about 15 minutes on CPU. Add `--max-tasks 3` for a
+quick check first.
+
 ### Part 2: tool ablation
 
 1. Copy the official starter `agent.yaml` to `agent/template.yaml`.
