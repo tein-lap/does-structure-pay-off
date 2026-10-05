@@ -225,7 +225,7 @@ failed this way. Causes, all fixed in `agent/make_configs.py` and `agent/submiss
 | Cause | Fix |
 |---|---|
 | `max_time_minutes: 60` per task, about 120 hours worst case, against the competition's 12-hour total limit | Calculated from `runtime` in `arms.yaml`: floor(12 h × 60 × 0.7 / 120 tasks) = 4 minutes; the build refuses any config whose worst case does not fit |
-| `max_output_tokens: 16384`, `thinking_budget: 4096`, `include_thoughts: true` | 2048 tokens, 512 thinking tokens, thoughts not returned; the build refuses `max_output_tokens` above 4096 |
+| `max_output_tokens: 16384`, `thinking_budget: 4096`, `include_thoughts: true` | 2048 tokens and 512 thinking tokens (`include_thoughts: true` is needed to keep thinking on, HARNESS_README 2.4); the build refuses `max_output_tokens` above 4096 |
 | `timeout_seconds: 300`, `max_turns: 500` | 60 seconds, budget + 50 turns |
 | Prompt said "call submit_patch last" and invited frequent free `get_status` calls | Submit as soon as a plausible fix exists, always before calls or time run out; `get_status` at most every 10 actions; tests only with `timeout 60`; no network commands |
 | (Not a cause.) `!include` is officially supported by the harness (Overview: "Resolves file paths relative to the directory of the file containing the tag"). We inline the prompt and settings anyway, so `agent.yaml` is self-contained and our checks can read the real prompt | Every `agent.yaml` must load with `yaml.safe_load` and contain the real budget and submit rule |
@@ -252,7 +252,18 @@ third of the task time, at most 60 seconds (60 seconds at 4 minutes per task).
 - [x] Free tools: only `submit_patch` and `get_status`.
 - [x] Skills are declared under `skills:` (not `tools:`) in `agent.yaml`.
 - [x] Official graphs contain only `calls` edges (checked on all 127 graphs).
-- [ ] How a skill script is run inside the sandbox, and whether it costs a tool call (paper Section 3.3)
+- [x] Thinking (2.4): on only with `include_thoughts: true` and `thinking_budget > 0`; either `0` or
+      `include_thoughts: false` turns it off. The build checks that the two agree.
+- [x] The harness adds a "Code Intelligence Tools" section to the task message for every agent when
+      graph data exists (5.2). Arms without some graph tools are told in their prompt not to call them.
+- [x] `search_similar_code` resolves its query against node names in the `.npz` archive; pass a
+      symbol name, not a sentence (6.3). The harness's own task message still calls it a "keyword" search.
+- [x] Container setup is outside the per-task time budget (7.1) but inside the 12-hour total
+      (Overview), which the 30% margin in `arms.yaml` covers.
+- [x] If the agent never calls `submit_patch`, the harness still extracts and grades its working-tree
+      diff (8.1).
+- [ ] Skill scripts run via `run_skill_script` and their time counts against the budget (Overview);
+      whether a call also counts as a tool call is not stated (paper Section 3.3)
 - [ ] `get_code_neighbors(edge_type=...)`: the docs give `"CALLS"` as an example, but the data uses
       lowercase `calls`. Check whether the filter is case-sensitive before telling the agent to use it.
 

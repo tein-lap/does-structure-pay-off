@@ -56,6 +56,14 @@ TOOL_GUIDE = {
     "search_similar_code": "- search_similar_code: find code similar to a given symbol. Pass a symbol name such as `parse_header`, not a sentence.",
 }
 
+GRAPH_TOOLS = ("get_code_neighbors", "get_code_subgraph", "search_similar_code")
+
+# HARNESS_README 5.2: the harness appends a "Code Intelligence Tools" section to the task
+# message whenever graph data exists, for EVERY agent. Arms without some of these tools must
+# be told not to call them, or the comparison between arms is not fair.
+MISSING_TOOLS_NOTE = ("- Only the tools listed above are available to you. The task message may also mention {missing}; "
+                      "you do not have {them}, so do not call {them}.")
+
 BRIDGE_NOTE = ("- Before exploring, use the issue_to_symbols skill once on the issue text, and use the "
                "symbols it returns as starting points for the graph tools.")
 
@@ -112,7 +120,13 @@ def eval_config(budget: int, minutes: int, runtime: dict) -> str:
 
 def render_agent(template: Path, tools: list[str], budget: int, minutes: int, bridge: bool,
                  sampling_overrides: dict | None = None, test_timeout: int = 60) -> str:
-    guide = "\n".join(TOOL_GUIDE[t] for t in tools) + (("\n" + BRIDGE_NOTE) if bridge else "")
+    guide = "\n".join(TOOL_GUIDE[t] for t in tools)
+    missing = [t for t in GRAPH_TOOLS if t not in tools]
+    if missing:
+        names = ", ".join(missing)
+        guide += "\n" + MISSING_TOOLS_NOTE.format(missing=names, them="it" if len(missing) == 1 else "them")
+    if bridge:
+        guide += "\n" + BRIDGE_NOTE
     prompt = (template / "prompts" / "system.md").read_text()
     prompt = prompt.replace("{{BUDGET}}", str(budget))
     prompt = prompt.replace("{{MINUTES}}", f"{minutes} minute" + ("" if minutes == 1 else "s"))
@@ -121,7 +135,9 @@ def render_agent(template: Path, tools: list[str], budget: int, minutes: int, br
     sampling = yaml.safe_load((template / "configs" / "sampling.yaml").read_text())
     for key, value in (sampling_overrides or {}).items():
         if key == "thinking_budget":
-            sampling.setdefault("thinking_config", {})["thinking_budget"] = value
+            thinking = sampling.setdefault("thinking_config", {})
+            thinking["thinking_budget"] = value
+            thinking["include_thoughts"] = value > 0     # HARNESS_README 2.4: both are needed to turn thinking on
         else:
             sampling[key] = value
     sampling_text = yaml.safe_dump(sampling, sort_keys=False).rstrip("\n")
@@ -146,9 +162,15 @@ def check_submission(folder: Path, budget: int, minutes: int, runtime: dict, too
     instruction = agent.get("instruction") or ""
     if f"You have {budget} tool calls" not in instruction or "submit_patch" not in instruction:
         problems.append("instruction is missing the budget or the submit rule")
+    missing = [t for t in GRAPH_TOOLS if t not in tools]
+    if missing and not all(t in instruction.split("Only the tools listed above")[-1] for t in missing):
+        problems.append(f"instruction does not warn that {missing} are unavailable")
     sampling = agent.get("generate_content_config") or {}
     if not isinstance(sampling, dict) or sampling.get("max_output_tokens", 0) > MAX_OUTPUT_TOKENS:
         problems.append(f"generate_content_config missing or max_output_tokens > {MAX_OUTPUT_TOKENS}")
+    thinking = sampling.get("thinking_config") or {} if isinstance(sampling, dict) else {}
+    if thinking and (thinking.get("thinking_budget", 0) > 0) != bool(thinking.get("include_thoughts")):
+        problems.append("thinking_budget and include_thoughts disagree (HARNESS_README 2.4 needs both to enable thinking)")
     ev = yaml.safe_load((folder / "eval_config.yaml").read_text())["evaluation"]
     if ev["max_tool_calls"] != budget or ev["max_time_minutes"] != minutes:
         problems.append("eval_config.yaml does not match the budget or time")

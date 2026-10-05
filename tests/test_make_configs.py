@@ -26,13 +26,20 @@ def test_builds_fair_submissions(tmp_path):
     assert "adapter" not in a and "skills" not in a
     # The real prompt is inside agent.yaml, not a path to another file.
     assert "You have 25 tool calls" in a["instruction"] and "submit_patch" in a["instruction"]
-    assert "get_code_neighbors" not in a["instruction"]
+    assert "- get_code_neighbors:" not in a["instruction"]             # not offered in arm A's tool guide
     assert a["generate_content_config"]["max_output_tokens"] <= 4096
-    assert a["generate_content_config"]["thinking_config"]["include_thoughts"] is False
+    assert a["generate_content_config"]["thinking_config"] == {"thinking_budget": 512, "include_thoughts": True}
+    # The harness mentions the graph tools to every agent, so arm A must be told it lacks them.
+    assert "you do not have them" in a["instruction"]
+    assert all(g in a["instruction"].split("Only the tools listed above")[1]
+               for g in ("get_code_neighbors", "get_code_subgraph", "search_similar_code"))
     d = yaml.safe_load((out / "D" / "b100" / "agent.yaml").read_text())
     assert {"get_code_neighbors", "get_code_subgraph", "search_similar_code"} <= set(d["tools"])
     c = yaml.safe_load((out / "C" / "b50" / "agent.yaml").read_text())
     assert "search_similar_code" in c["tools"] and "get_code_neighbors" not in c["tools"]
+    note_c = c["instruction"].split("Only the tools listed above")[1]
+    assert "get_code_neighbors" in note_c and "search_similar_code" not in note_c
+    assert "Only the tools listed above" not in d["instruction"]          # arm D has every graph tool
     assert not (out / "D+bridge").exists()                 # no SKILL.md yet -> bridge arms skipped
     # All arms share the same generation settings.
     assert len({str(yaml.safe_load((out / arm / "b50" / "agent.yaml").read_text())["generate_content_config"])
@@ -61,7 +68,7 @@ def test_smoke_submission(tmp_path):
     assert names == {"agent.yaml", "eval_config.yaml"}       # nothing else to read, all at the zip root
     assert ev["max_tool_calls"] == 3 and ev["max_time_minutes"] == 1
     assert 120 * ev["max_time_minutes"] <= 2 * 60                # finishes even under a 2-hour limit
-    assert agent["generate_content_config"]["thinking_config"]["thinking_budget"] == 0
+    assert agent["generate_content_config"]["thinking_config"] == {"thinking_budget": 0, "include_thoughts": False}
     assert "about 1 minute for this task" in agent["instruction"]
     assert ev["timeout_seconds"] == 20 and "timeout 20 python -m pytest" in agent["instruction"]   # a third of 1 minute
 
