@@ -87,3 +87,26 @@ def test_unsafe_template_is_refused(tmp_path):
     out, r = build(tmp_path, "--template", str(template))
     assert r.returncode != 0 and "max_output_tokens" in (r.stderr + r.stdout)
     assert not list((out / "zips").glob("A_*.zip"))           # no zip written for a failing config
+
+
+def test_bridge_arms_ship_a_standalone_skill(tmp_path, repo, graph):
+    out = tmp_path / "build"
+    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert "19 submissions" in r.stdout                     # 13 + best+bridge and D+bridge at 3 budgets
+    folder = tmp_path / "unzipped"
+    with zipfile.ZipFile(out / "zips" / "D_bridge_b100.zip") as zf:
+        zf.extractall(folder)
+    agent = yaml.safe_load((folder / "agent.yaml").read_text())
+    assert agent["skills"] == ["skills/issue_to_symbols"]
+    assert "issue_to_symbols" not in agent["tools"] and "scripts/issue_to_symbols.py" in agent["instruction"]
+    skill = folder / "skills" / "issue_to_symbols"
+    assert (skill / "SKILL.md").read_text().startswith("---\nname: issue_to_symbols")
+    assert {p.name for p in (skill / "scripts").iterdir()} == {"issue_to_symbols.py", "bridge.py", "symbols.py"}
+    # Run it like the sandbox: isolated interpreter, no site-packages, outside this repository.
+    line = graph.nodes["pkg.utils.parse_value"]["lineno"] + 1
+    issue = f'Traceback (most recent call last):\n  File "/workspace/pkg/utils.py", line {line}, in parse_value\nValueError\n'
+    run = subprocess.run([sys.executable, "-I", "-S", str(skill / "scripts" / "issue_to_symbols.py"),
+                          "--root", str(repo), issue], capture_output=True, text=True, cwd=tmp_path)
+    assert run.returncode == 0, run.stderr
+    assert "1. pkg.utils.parse_value (function)" in run.stdout

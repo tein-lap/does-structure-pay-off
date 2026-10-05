@@ -64,8 +64,14 @@ GRAPH_TOOLS = ("get_code_neighbors", "get_code_subgraph", "search_similar_code")
 MISSING_TOOLS_NOTE = ("- Only the tools listed above are available to you. The task message may also mention {missing}; "
                       "you do not have {them}, so do not call {them}.")
 
-BRIDGE_NOTE = ("- Before exploring, use the issue_to_symbols skill once on the issue text, and use the "
-               "symbols it returns as starting points for the graph tools.")
+BRIDGE_NOTE = ("- Before exploring, run the issue_to_symbols skill once (its script scripts/issue_to_symbols.py) "
+               "with the issue text, and use the symbols it prints as starting points for the graph tools.")
+
+# HARNESS_README 2.4: the only file types a submission may contain.
+ALLOWED_EXTENSIONS = {".yaml", ".yml", ".md", ".txt", ".py", ".json", ".safetensors"}
+
+# Shipped next to the skill script so it runs with the standard library only in the sandbox.
+SKILL_MODULES = ("bridge.py", "symbols.py")
 
 MAX_OUTPUT_TOKENS = 4096   # keep each reply far below the ~14k-token compaction point of the 32k context
 
@@ -180,7 +186,15 @@ def check_submission(folder: Path, budget: int, minutes: int, runtime: dict, too
     if worst_case_minutes(runtime, minutes) > total * runtime["safety"]:
         problems.append(f"worst case {worst_case_minutes(runtime, minutes):.0f} min > "
                         f"{runtime['safety']:.0%} of the {total:.0f}-minute limit")
-    leftovers = [p.name for p in folder.rglob("*") if p.is_file() and "{{" in p.read_text(errors="ignore")]
+    bad_types = [p.name for p in folder.rglob("*") if p.is_file() and p.suffix not in ALLOWED_EXTENSIONS]
+    if bad_types:
+        problems.append(f"file types the harness rejects: {bad_types}")
+    for skill in agent.get("skills") or []:
+        manifest = folder / skill / "SKILL.md"
+        if not manifest.is_file() or not manifest.read_text().startswith("---\nname:"):
+            problems.append(f"{skill}/SKILL.md missing or without 'name:' front matter")
+    leftovers = [p.name for p in folder.rglob("*") if p.is_file() and p.suffix in {".yaml", ".yml"}
+                 and "{{" in p.read_text(errors="ignore")]
     if leftovers:
         problems.append(f"unfilled placeholder in {leftovers}")
     if problems:
@@ -208,7 +222,10 @@ def build_one(template: Path, folder: Path, tools: list[str], budget: int, minut
     agent = render_agent(template, tools, budget, minutes, bridge, sampling_overrides, command_timeout(runtime, minutes))
     if bridge:
         agent = add_skill(agent, bridge_skill)
-        shutil.copytree(skills_dir, folder / bridge_skill)
+        target = folder / bridge_skill
+        shutil.copytree(skills_dir, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        for module in SKILL_MODULES:
+            shutil.copy(HERE.parent / "dspo" / module, target / "scripts" / module)
     (folder / "agent.yaml").write_text(agent)
     (folder / "eval_config.yaml").write_text(eval_config(budget, minutes, runtime))
     check_submission(folder, budget, minutes, runtime, tools)

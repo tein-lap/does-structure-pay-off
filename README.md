@@ -16,7 +16,8 @@ everything needed to answer that question and to reproduce the paper's numbers.
 | Part 2 | Localization scorer: did the agent look at the gold code? | `dspo/localization.py` | Built, tested on real fix commits |
 | Part 2 | Arm definitions A–D and config generator | `agent/arms.yaml`, `agent/make_configs.py` | Built; needs the official `agent.yaml` template |
 | Part 2 | Run scoring: resolution, recall, calls by category | `experiments/score.py` | Built, tested on fake runs |
-| Part 3 | Issue-to-symbol bridge | `dspo/bridge.py`, `agent/skills/issue_to_symbols.py` | Built, tested |
+| Part 3 | Issue-to-symbol bridge | `dspo/bridge.py`, `dspo/symbols.py` | Built, tested |
+| Part 3 | Bridge as a competition skill | `agent/skills/issue_to_symbols/` (`SKILL.md`, `scripts/`) | Built; runs with the standard library only, tested in an isolated interpreter |
 | Part 3 | Offline bridge evaluation vs TF-IDF and random | `experiments/bridge_eval.py` | Built, run on 44 SWE-bench requests issues |
 | Part 4 | Leave-one-repository-out analysis | `experiments/loro.py` | Built, tested on fake runs |
 | All | Run manifest (config, seed, commit, hardware, time) | `dspo/runlog.py` | Built |
@@ -28,7 +29,7 @@ No agent experiments have been run yet, so there are no results yet.
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest                      # 36 tests
+pytest                      # 38 tests
 ```
 
 Python 3.10+. Dependencies are BSD or MIT licensed (see `requirements.txt`).
@@ -171,7 +172,7 @@ How the measurements are defined:
 
 ```bash
 python -m dspo.bridge --graph repo.pkl --issue issue.txt -k 5
-python agent/skills/issue_to_symbols.py --symbols repo.symbols.json < issue.txt   # skill form
+python agent/skills/issue_to_symbols/scripts/issue_to_symbols.py --root path/to/repo --issue-file issue.txt   # skill form
 ```
 
 It extracts:
@@ -262,6 +263,9 @@ third of the task time, at most 60 seconds (60 seconds at 4 minutes per task).
       (Overview), which the 30% margin in `arms.yaml` covers.
 - [x] If the agent never calls `submit_patch`, the harness still extracts and grades its working-tree
       diff (8.1).
+- [x] Skills are folders with `SKILL.md` (front matter `name:`) and scripts that run in the sandbox (2.2,
+      Overview). `agent/skills/issue_to_symbols/` follows this; `make_configs.py` ships `dspo/bridge.py` and
+      `dspo/symbols.py` next to its script, so it needs only the standard library and indexes `/workspace` itself.
 - [ ] Skill scripts run via `run_skill_script` and their time counts against the budget (Overview);
       whether a call also counts as a tool call is not stated (paper Section 3.3)
 - [ ] `get_code_neighbors(edge_type=...)`: the docs give `"CALLS"` as an example, but the data uses

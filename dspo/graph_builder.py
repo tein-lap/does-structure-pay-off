@@ -21,7 +21,6 @@ import ast
 import json
 import pickle
 import sys
-import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,13 +28,7 @@ from pathlib import Path
 import networkx as nx
 
 from dspo import CALLS, DEFINED_IN, IMPORTS
-
-SKIP_DIRS = {
-    ".git", ".hg", ".tox", ".nox", ".venv", "venv", "env", "__pycache__",
-    "node_modules", "build", "dist", "site-packages", ".eggs",
-    "docs", "doc", "examples", "example", "scripts", "benchmarks",
-}
-TEST_DIRS = {"tests", "test", "testing"}
+from dspo.symbols import SKIP_DIRS, TEST_DIRS, definitions, discover_modules, parse_module  # noqa: F401
 
 # Method names shared with builtins (dict.update, list.append, file.read, ...).
 # A unique-name match on these is far more likely to be wrong than right.
@@ -58,35 +51,6 @@ class ModuleInfo:
     lines: list[str]
     # local alias -> dotted target (a module or a symbol inside a module)
     aliases: dict[str, str] = field(default_factory=dict)
-
-
-def _is_test_file(rel: Path) -> bool:
-    name = rel.name
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
-
-
-def discover_modules(root: Path, include_tests: bool = False) -> dict[str, Path]:
-    """Map dotted module name -> file path for every .py file worth parsing."""
-    root = root.resolve()
-    skip = SKIP_DIRS if include_tests else SKIP_DIRS | TEST_DIRS
-    found: dict[str, Path] = {}
-    for path in sorted(root.rglob("*.py")):
-        rel = path.relative_to(root)
-        if any(part in skip or part.startswith(".") for part in rel.parts[:-1]):
-            continue
-        if not include_tests and _is_test_file(rel):
-            continue
-        if rel.name == "setup.py" and len(rel.parts) == 1:
-            continue
-        parts = list(rel.with_suffix("").parts)
-        if parts and parts[0] == "src":  # src/ layout
-            parts = parts[1:]
-        if parts and parts[-1] == "__init__":
-            parts = parts[:-1]
-        if not parts or not all(p.isidentifier() for p in parts):
-            continue
-        found[".".join(parts)] = path
-    return found
 
 
 def _resolve_relative(module: ModuleInfo, level: int, target: str | None) -> str:
@@ -112,18 +76,15 @@ class GraphBuilder:
     # ---------------------------------------------------------------- parsing
     def build(self) -> nx.MultiDiGraph:
         for name, path in discover_modules(self.root, self.include_tests).items():
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-                with warnings.catch_warnings():  # old code: invalid escapes in docstrings etc.
-                    warnings.simplefilter("ignore", SyntaxWarning)
-                    tree = ast.parse(text, filename=str(path))
-            except SyntaxError as exc:
-                self.parse_errors.append(f"{path}: {exc}")
+            parsed = parse_module(path)
+            if parsed is None:
+                self.parse_errors.append(f"{path}: not valid Python for this interpreter")
                 continue
+            tree, lines = parsed
             rel = path.relative_to(self.root).as_posix()
             self.modules[name] = ModuleInfo(
                 name=name, path=path, rel=rel, is_package=path.name == "__init__.py",
-                tree=tree, lines=text.splitlines(),
+                tree=tree, lines=lines,
             )
         for mod in self.modules.values():
             self._add_definitions(mod)
@@ -151,30 +112,16 @@ class GraphBuilder:
             end_lineno=len(mod.lines), source="\n".join(mod.lines),
         )
 
-        def visit(body: list[ast.stmt], parent: str) -> None:
-            for stmt in body:
-                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    node_id = f"{parent}.{stmt.name}"
-                    kind = "class" if isinstance(stmt, ast.ClassDef) else "function"
-                    if node_id in self.graph:  # redefinition (e.g. under if/else); keep first
-                        continue
-                    self._add_node(
-                        node_id, kind=kind, name=stmt.name, qualname=node_id,
-                        module=mod.name, file=mod.rel, lineno=stmt.lineno,
-                        end_lineno=stmt.end_lineno, source=self._source(mod, stmt),
-                    )
-                    self.graph.add_edge(node_id, parent, key=DEFINED_IN, type=DEFINED_IN)
-                    if kind == "class":
-                        self.class_bases[node_id] = stmt.bases
-                        self.class_module[node_id] = mod.name
-                    visit(stmt.body, node_id)
-                elif isinstance(stmt, (ast.If, ast.Try, ast.With, ast.AsyncWith)):
-                    # Definitions guarded by `if TYPE_CHECKING:`, try/except imports, etc.
-                    for sub in ("body", "orelse", "finalbody", "handlers"):
-                        for item in getattr(stmt, sub, []) or []:
-                            visit(item.body if isinstance(item, ast.ExceptHandler) else [item], parent)
-
-        visit(mod.tree.body, mod.name)
+        for node_id, kind, name, stmt, parent in definitions(mod.tree, mod.name, self.graph):
+            self._add_node(
+                node_id, kind=kind, name=name, qualname=node_id,
+                module=mod.name, file=mod.rel, lineno=stmt.lineno,
+                end_lineno=stmt.end_lineno, source=self._source(mod, stmt),
+            )
+            self.graph.add_edge(node_id, parent, key=DEFINED_IN, type=DEFINED_IN)
+            if kind == "class":
+                self.class_bases[node_id] = stmt.bases
+                self.class_module[node_id] = mod.name
 
     def _collect_imports(self, mod: ModuleInfo) -> None:
         for node in ast.walk(mod.tree):
