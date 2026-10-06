@@ -120,3 +120,13 @@ def test_prompt_with_braces_is_refused(tmp_path):
     prompt.write_text(prompt.read_text() + "\nSee {issue_url} for details.\n")
     out, r = build(tmp_path, "--template", str(template))
     assert r.returncode != 0 and "placeholders" in (r.stderr + r.stdout)
+
+
+def test_search_tool_is_told_to_keep_k_small(tmp_path):
+    out, r = build(tmp_path)
+    for arm in ("C", "D"):
+        ins = yaml.safe_load((out / arm / "b100" / "agent.yaml").read_text())["instruction"]
+        assert "set k=5 or less" in ins
+    for arm in ("A", "B"):                                    # unchanged: they do not have the tool
+        ins = yaml.safe_load((out / arm / "b100" / "agent.yaml").read_text())["instruction"]
+        assert "k=5" not in ins

@@ -53,7 +53,9 @@ TOOL_GUIDE = {
     "get_status": "- get_status: show how many tool calls are left (free). Use it at most once every 10 actions.",
     "get_code_neighbors": "- get_code_neighbors: list the functions that call, or are called by, a function or class. Pass a symbol name such as `Session.send`.",
     "get_code_subgraph": "- get_code_subgraph: show the call links between a list of symbols.",
-    "search_similar_code": "- search_similar_code: find code similar to a given symbol. Pass a symbol name such as `parse_header`, not a sentence.",
+    # HARNESS_README 6.3: each result carries its full source and there is no output cap, so a
+    # small k keeps one call from flooding the 32,768-token context.
+    "search_similar_code": "- search_similar_code: find code similar to a given symbol. Pass a symbol name such as `parse_header`, not a sentence, and set k=5 or less.",
 }
 
 GRAPH_TOOLS = ("get_code_neighbors", "get_code_subgraph", "search_similar_code")

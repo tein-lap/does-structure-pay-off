@@ -242,6 +242,15 @@ b100 zips of arms A, B, C and D. With a few minutes per task the time limit, not
 ends each run, so b25/b50 zips would behave almost the same as b100. One command may use at most a
 third of the task time, at most 60 seconds (60 seconds at 4 minutes per task).
 
+**Known prompt issues, kept unchanged during the A–D series so all arms share one prompt** (found by an
+independent audit against HARNESS_README; fix them for every arm together in the next series):
+- "Put scratch scripts in /tmp": `write_file("/tmp/x.py")` strips the leading `/` and writes
+  `/workspace/tmp/x.py`, which then lands in the patch (6.2). Say "create /tmp files with run_command".
+- The example `timeout 60` equals `timeout_seconds: 60`, so the harness may cut the command first (6.1);
+  use a few seconds less.
+- `max_output_tokens: 2048` with 512 thinking tokens is tight next to the documented 16,384/4,096 (10.1);
+  check traces for `MAX_TOKENS` before changing it.
+
 ## Checked against HARNESS_README
 
 - [x] Tool names: the 9 built-in tools (`run_command`, `read_file`, `edit_file`, `write_file`,
