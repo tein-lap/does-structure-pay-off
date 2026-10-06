@@ -110,3 +110,13 @@ def test_bridge_arms_ship_a_standalone_skill(tmp_path, repo, graph):
                           "--root", str(repo), issue], capture_output=True, text=True, cwd=tmp_path)
     assert run.returncode == 0, run.stderr
     assert "1. pkg.utils.parse_value (function)" in run.stdout
+
+
+def test_prompt_with_braces_is_refused(tmp_path):
+    # ADK would try to fill {name} from session state (HARNESS_README 2.3/5.1).
+    template = tmp_path / "tpl"
+    subprocess.run(["cp", "-r", str(ROOT / "agent/submission_template"), str(template)], check=True)
+    prompt = template / "prompts" / "system.md"
+    prompt.write_text(prompt.read_text() + "\nSee {issue_url} for details.\n")
+    out, r = build(tmp_path, "--template", str(template))
+    assert r.returncode != 0 and "placeholders" in (r.stderr + r.stdout)

@@ -168,6 +168,10 @@ def check_submission(folder: Path, budget: int, minutes: int, runtime: dict, too
     instruction = agent.get("instruction") or ""
     if f"You have {budget} tool calls" not in instruction or "submit_patch" not in instruction:
         problems.append("instruction is missing the budget or the submit rule")
+    # HARNESS_README 2.3/5.1: ADK fills {name} placeholders in the instruction from session state;
+    # an unknown one can break the agent at runtime, so the prompt must contain no braces at all.
+    if re.search(r"[{}]", instruction):
+        problems.append(f"instruction contains {{...}} placeholders ADK would try to fill: {re.findall(r'[{][^{}]*[}]', instruction)}")
     missing = [t for t in GRAPH_TOOLS if t not in tools]
     if missing and not all(t in instruction.split("Only the tools listed above")[-1] for t in missing):
         problems.append(f"instruction does not warn that {missing} are unavailable")
