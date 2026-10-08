@@ -11,7 +11,8 @@ SCRIPT = str(ROOT / "agent/make_configs.py")
 
 def build(tmp_path, *extra):
     out = tmp_path / "build"
-    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out), "--skills-dir", str(tmp_path / "no_skill"), *extra],
+    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out), "--skills-dir", str(tmp_path / "no_skill"),
+                        "--allow-blocked", *extra],
                        capture_output=True, text=True)
     return out, r
 
@@ -91,9 +92,9 @@ def test_unsafe_template_is_refused(tmp_path):
 
 def test_bridge_arms_ship_a_standalone_skill(tmp_path, repo, graph):
     out = tmp_path / "build"
-    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out)], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out), "--allow-blocked"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr + r.stdout
-    assert "19 submissions" in r.stdout                     # 13 + best+bridge and D+bridge at 3 budgets
+    assert "19 submissions" in r.stdout                     # 13 + B+bridge and D+bridge at 3 budgets
     folder = tmp_path / "unzipped"
     with zipfile.ZipFile(out / "zips" / "D_bridge_b100.zip") as zf:
         zf.extractall(folder)
@@ -130,3 +131,16 @@ def test_search_tool_is_told_to_keep_k_small(tmp_path):
     for arm in ("A", "B"):                                    # unchanged: they do not have the tool
         ins = yaml.safe_load((out / arm / "b100" / "agent.yaml").read_text())["instruction"]
         assert "k=5" not in ins
+
+
+def test_arms_with_blocked_tools_are_not_built_by_default(tmp_path):
+    # search_similar_code can return one result larger than the whole context (arms.yaml, blocked_tools).
+    out = tmp_path / "build"
+    r = subprocess.run([sys.executable, SCRIPT, "--out", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr + r.stdout
+    built = {p.name for p in (out / "zips").glob("*.zip")}
+    assert {"A_b100.zip", "B_b100.zip", "B_bridge_b100.zip", "SMOKE_A_b3.zip"} <= built
+    assert not any(n.startswith(("C_", "D_", "D_bridge")) for n in built)
+    assert "skipping C" in r.stdout and "search_similar_code" in r.stdout
+    b = yaml.safe_load((out / "B+bridge" / "b100" / "agent.yaml").read_text())
+    assert "search_similar_code" not in b["tools"] and b["skills"] == ["skills/issue_to_symbols"]

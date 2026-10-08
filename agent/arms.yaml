@@ -29,8 +29,18 @@ arms:
 best_arm: D
 bridge_skill: skills/issue_to_symbols
 bridge_configs:
-  best+bridge: best_arm
-  D+bridge: D
+  B+bridge: B                        # the bridge seeds the call-graph tools; B has only safe tools
+  D+bridge: D                        # blocked while search_similar_code is blocked (see below)
+
+# Tools whose output can be larger than the model's whole context. search_similar_code returns
+# the FULL source of every result with no documented size cap (HARNESS_README 6.3; the 5,000 and
+# 10,000-character caps cover only run_command and read_file). Measured on the public upstream
+# repos: fastapi.applications.FastAPI is ~46,000 tokens and fastapi.routing.APIRouter ~41,000,
+# more than the 32,768-token context, so one result can make the next model call impossible.
+# Arm C (the only arm whose single new tool is this one) failed twice with "Kaggle Error" on
+# 2026-10-06/07, while A and B succeeded. Arms using a blocked tool are not built unless
+# make_configs.py is run with --allow-blocked.
+blocked_tools: [search_similar_code]
 
 # Written to eval_config.yaml (evaluation.max_tool_calls) next to each agent.yaml.
 budgets: [25, 50, 100]

@@ -237,8 +237,16 @@ def build_one(template: Path, folder: Path, tools: list[str], budget: int, minut
     check_submission(folder, budget, minutes, runtime, tools)
 
 
-def build(template: Path, spec: dict, out: Path, skills_dir: Path) -> list[Path]:
+def build(template: Path, spec: dict, out: Path, skills_dir: Path, allow_blocked: bool = False) -> list[Path]:
     runtime = spec["runtime"]
+    blocked = set(spec.get("blocked_tools") or []) if not allow_blocked else set()
+
+    def is_blocked(name: str, groups: list[str]) -> bool:
+        hit = blocked & set(tools_for(spec, groups))
+        if hit:
+            print(f"skipping {name}: uses blocked tool(s) {sorted(hit)} (see blocked_tools in arms.yaml)")
+        return bool(hit)
+
     minutes = minutes_per_task(runtime)
     configs = {name: (groups, False) for name, groups in spec["arms"].items()}
     have_skill = (skills_dir / "SKILL.md").exists()
@@ -252,7 +260,10 @@ def build(template: Path, spec: dict, out: Path, skills_dir: Path) -> list[Path]
     zips = []
     (out / "zips").mkdir(parents=True, exist_ok=True)
 
+    configs = {name: v for name, v in configs.items() if not is_blocked(name, v[0])}
     smoke = spec.get("smoke")
+    if smoke and is_blocked("SMOKE", spec["arms"][smoke["arm"]]):
+        smoke = None
     if smoke:
         tools = tools_for(spec, spec["arms"][smoke["arm"]])
         folder = out / "SMOKE" / f"{smoke['arm']}_b{smoke['budget']}"
@@ -283,13 +294,15 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--total-hours", type=float, help="override runtime.total_hours (default 12, from the competition Overview > Evaluation)")
     parser.add_argument("--parallel-tasks", type=int, help="override runtime.parallel_tasks")
+    parser.add_argument("--allow-blocked", action="store_true",
+                        help="also build arms that use blocked_tools (for testing only; see arms.yaml)")
     args = parser.parse_args()
     spec = yaml.safe_load(args.arms.read_text())
     if args.total_hours:
         spec["runtime"]["total_hours"] = args.total_hours
     if args.parallel_tasks:
         spec["runtime"]["parallel_tasks"] = args.parallel_tasks
-    zips = build(args.template, spec, args.out, args.skills_dir)
+    zips = build(args.template, spec, args.out, args.skills_dir, args.allow_blocked)
     print(f"{len(zips)} submissions written to {args.out}/zips/")
 
 

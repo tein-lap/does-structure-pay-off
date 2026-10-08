@@ -242,6 +242,12 @@ b100 zips of arms A, B, C and D. With a few minutes per task the time limit, not
 ends each run, so b25/b50 zips would behave almost the same as b100. One command may use at most a
 third of the task time, at most 60 seconds (60 seconds at 4 minutes per task).
 
+**`search_similar_code` is blocked (`blocked_tools` in `agent/arms.yaml`).** It returns the full source of every
+result with no documented size cap (HARNESS_README 6.3). In the public upstream repos, `fastapi.applications.FastAPI`
+is about 46,000 tokens and `fastapi.routing.APIRouter` about 41,000, more than the 32,768-token context. Arm C, whose
+only new tool is this one, failed twice with "Kaggle Error" while A and B succeeded. `make_configs.py` skips arms
+using it unless `--allow-blocked` is given; the bridge study runs on B (`B+bridge`).
+
 **Known prompt issues, kept unchanged during the A–D series so all arms share one prompt** (found by an
 independent audit against HARNESS_README; fix them for every arm together in the next series):
 - "Put scratch scripts in /tmp": `write_file("/tmp/x.py")` strips the leading `/` and writes
